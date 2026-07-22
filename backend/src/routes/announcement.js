@@ -1,0 +1,12 @@
+const router = require('express').Router();
+const { protect, authorize } = require('../middleware/auth');
+const { getAll, create, pin, unpin, update, remove, markRead } = require('../controllers/announcementController');
+router.use(protect);
+router.get('/',          getAll);
+router.post('/',         authorize('admin','security'), create);
+router.put('/:id/pin',   authorize('admin'), pin);
+router.put('/:id/unpin', authorize('admin'), unpin);
+router.put('/:id/read',  markRead);
+router.put('/:id',       authorize('admin'), update);
+router.delete('/:id',    authorize('admin'), remove);
+module.exports = router;
