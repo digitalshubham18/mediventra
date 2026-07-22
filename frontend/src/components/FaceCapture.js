@@ -8,7 +8,8 @@ let modelsLoadPromise = null;
 // per page session, however many times this component is mounted.
 function loadModels() {
   if (!modelsLoadPromise) {
-    modelsLoadPromise = import('face-api.js').then(async (faceapi) => {
+    // modelsLoadPromise = import('face-api.js').then(async (faceapi) => {
+      modelsLoadPromise = import('@vladmandic/face-api').then(async (faceapi) => {
       await Promise.all([
         faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
         faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
