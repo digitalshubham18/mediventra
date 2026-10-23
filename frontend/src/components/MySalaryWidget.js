@@ -108,8 +108,7 @@ export default function MySalaryWidget() {
                   <div key={i} style={{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 12px',background:'#f8fafc',borderRadius:10,marginBottom:6,border:'1px solid #f1f5f9' }}>
                     <div>
                       <div style={{ fontWeight:700,color:'#0f172a',fontSize:13 }}>{MONTHS[(s.month||1)-1]} {s.year}</div>
-                      <div style={{ fontSize:11.5,color:'#64748b' }}>{s.daysWorked}d worked</div>
-                    </div>
+                    <div style={{ fontSize:11.5,color:'#64748b' }}>{+Number(s.daysWorked).toFixed(2)}d worked · {Math.floor((s.totalWorkedMinutes||0)/60)}h {(s.totalWorkedMinutes||0)%60}m</div>                    </div>
                     <div style={{ textAlign:'right' }}>
                       <div style={{ fontWeight:800,color:ac,fontSize:14,fontFamily:'monospace' }}>{INR(s.netPay)}</div>
                       <span style={{ fontSize:10.5,fontWeight:700,color:s.status==='credited'?'#15803d':'#92400e' }}>
