@@ -248,7 +248,8 @@ export default function SalaryPage() {
                       <td style={{ padding:'12px 14px',fontSize:13,fontWeight:600,color:'#ef4444' }}>-{INR(Object.values(s.deductions||{}).reduce((a,b)=>a+b,0))}</td>
                       <td style={{ padding:'12px 14px' }}><span style={{ fontSize:14,fontWeight:900,color:'#059669' }}>{INR(s.netPay)}</span></td>
                       <td style={{ padding:'12px 14px',fontSize:12,color:'#64748b' }}>
-                        <div>{s.daysWorked}d worked</div>
+                        <div>{+Number(s.daysWorked).toFixed(2)}d worked</div>
+<div style={{ fontSize:11, color:'#94a3b8' }}>{Math.floor((s.totalWorkedMinutes||0)/60)}h {(s.totalWorkedMinutes||0)%60}m total</div>
                         {(s.daysAbsent||0) > 0 && <div style={{color:'#dc2626',fontWeight:600}}>{s.daysAbsent}d absent{s.leaveDaysDeducted>0?` (${s.leaveDaysDeducted}d leave)`:''}</div>}
                       </td>
                       <td style={{ padding:'12px 14px' }}>
@@ -311,8 +312,7 @@ export default function SalaryPage() {
                   </div>
                 </div>
                 <div style={{ display:'flex',gap:10,flexWrap:'wrap' }}>
-                  {[['Days Worked',selSalary.daysWorked],['Days Absent',selSalary.daysAbsent],['OT Hours',selSalary.overtimeHours],['Mode',selSalary.paymentMode?.replace('_',' ')]].map(([l,v])=>(
-                    <div key={l} style={{ background:'rgba(255,255,255,.12)',borderRadius:9,padding:'6px 12px' }}>
+{[['Days Worked',+Number(selSalary.daysWorked).toFixed(2)],['Total Hours',`${Math.floor((selSalary.totalWorkedMinutes||0)/60)}h ${(selSalary.totalWorkedMinutes||0)%60}m`],['Days Absent',selSalary.daysAbsent],['OT Hours',selSalary.overtimeHours],['Mode',selSalary.paymentMode?.replace('_',' ')]].map(([l,v])=>(                    <div key={l} style={{ background:'rgba(255,255,255,.12)',borderRadius:9,padding:'6px 12px' }}>
                       <div style={{ color:'rgba(255,255,255,.5)',fontSize:9,letterSpacing:.5 }}>{l}</div>
                       <div style={{ color:'#fff',fontWeight:700,fontSize:12,textTransform:'capitalize' }}>{v}</div>
                     </div>
@@ -431,8 +431,7 @@ export default function SalaryPage() {
                         <div style={{ fontSize:12, color:'#94a3b8' }}>Loading attendance…</div>
                       ) : attendancePreview ? (
                         <div style={{ fontSize:12.5, color:'#1e3a8a' }}>
-                          ✅ <strong>{attendancePreview.daysWorked}</strong> days worked, <strong style={{ color: attendancePreview.daysAbsent>0?'#dc2626':'#1e3a8a' }}>{attendancePreview.daysAbsent}</strong> absent, {attendancePreview.daysOnLeave} on approved leave (of {attendancePreview.workingDaysCounted} working days this month). Pay will only reflect actual days worked.
-                        </div>
+                    ✅ <strong>{attendancePreview.daysWorked}</strong> days worked (<strong>{Math.floor(attendancePreview.totalWorkedMinutes/60)}h {attendancePreview.totalWorkedMinutes%60}m</strong> total), <strong style={{ color: attendancePreview.daysAbsent>0?'#dc2626':'#1e3a8a' }}>{attendancePreview.daysAbsent}</strong> absent/short, {attendancePreview.daysOnLeave} on approved leave (of {attendancePreview.workingDaysCounted} working days this month).{attendancePreview.shortSessionDays > 0 && ` ${attendancePreview.shortSessionDays} very short check-in(s) totalling ${attendancePreview.shortSessionMinutes} min were pooled and paid proportionally.`} Pay reflects actual time worked.                        </div>
                       ) : <div style={{ fontSize:12, color:'#94a3b8' }}>No attendance data found — will default to 0 worked days unless you override.</div>
                     ) : (
                       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
