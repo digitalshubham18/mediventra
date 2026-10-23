@@ -7,7 +7,9 @@ const emailService = require('../utils/emailService');
 const { notify } = require('../utils/notify');
 
 const BASE_PAY = { admin:80000, doctor:120000, nurse:45000, pharmacist:50000, wardboy:25000, sweeper:20000, otboy:28000, finance:65000, electrician:30000, plumber:28000, it_technician:40000, equipment_tech:35000, biomedical:55000, security:22000, receptionist:28000, ambulance_driver:25000, lab_technician:42000 };
-
+const MIN_VALID_SESSION_MINUTES = 5;  // must match attendanceController.js
+const FULL_DAY_MINUTES = 8 * 60;      // 8 working hours = 1 day
+const round2 = n => Math.round(n * 100) / 100;
 // Works out how many days an employee actually worked (vs. was absent) in a
 // given month from real Attendance records — rather than assuming a flat
 // 26 days worked, which is what happened before regardless of whether the
@@ -29,6 +31,13 @@ async function computeAttendanceStats(employeeId, month, year) {
   const attByDay = new Map(attendance.map(a => [new Date(a.date).toDateString(), a]));
   const isOnLeave = (d) => leaves.some(l => new Date(l.from) <= d && new Date(l.to) >= d);
 
+  // Exact minutes of one attendance record (from real timestamps, not rounded)
+  const sessionMinutes = (a) =>
+    (a?.checkInTime && a?.checkOutTime) ? Math.max(0, (new Date(a.checkOutTime) - new Date(a.checkInTime)) / 60000) : 0;
+
+  // TOTAL working time of the whole month (every check-in → check-out, even 1-2 min ones)
+  const totalWorkedMinutes = Math.round(attendance.reduce((sum, a) => sum + sessionMinutes(a), 0));
+
   let dayKeys;
   if (schedules.length > 0) {
     dayKeys = [...new Set(schedules.map(s => new Date(s.date).toDateString()))];
@@ -40,18 +49,41 @@ async function computeAttendanceStats(employeeId, month, year) {
   }
 
   let daysWorked = 0, daysAbsent = 0, daysOnLeave = 0, lateDays = 0, workingDaysCounted = 0;
+  let halfDays = 0, shortSessionDays = 0, shortSessionMinutes = 0;
+
   for (const dayKey of dayKeys) {
     const d = new Date(dayKey);
     if (d > effectiveEnd) continue;
     workingDaysCounted++;
     const att = attByDay.get(dayKey);
-    if (att?.status === 'present') daysWorked += 1;
+    const mins = sessionMinutes(att);
+    const isShortSession = att && att.checkOutTime && mins < MIN_VALID_SESSION_MINUTES
+                           && ['present', 'late'].includes(att.status);
+
+    if (isShortSession) {
+      // 1-2 minute check-in/out: no full day credit — its minutes are pooled below
+      shortSessionDays += 1;
+      shortSessionMinutes += mins;
+    }
+    else if (att?.status === 'present') daysWorked += 1;
     else if (att?.status === 'late') { daysWorked += 1; if (!att.lateWaived) lateDays += 1; }
-    else if (att?.status === 'half_day') daysWorked += 0.5;
+    else if (att?.status === 'half_day') { daysWorked += 0.5; halfDays += 1; }
     else if (att?.status === 'on_leave' || isOnLeave(d)) daysOnLeave += 1;
     else daysAbsent += 1;
   }
-  return { daysWorked, daysAbsent, daysOnLeave, lateDays, workingDaysCounted };
+
+  // Short sessions: add up all their minutes for the month, convert to days.
+  const shortCredit = Math.min(shortSessionDays, shortSessionMinutes / FULL_DAY_MINUTES);
+  daysWorked += shortCredit;
+  daysAbsent += (shortSessionDays - shortCredit); // unworked part of those days is deducted
+  daysAbsent += halfDays * 0.5;                   // the unworked half of each half-day is deducted
+
+  return {
+    daysWorked: round2(daysWorked),
+    daysAbsent: round2(daysAbsent),
+    daysOnLeave, lateDays, workingDaysCounted,
+    totalWorkedMinutes, shortSessionDays, shortSessionMinutes: round2(shortSessionMinutes),
+  };
 }
 
 const LATE_FINE_PER_DAY = 50; // ₹ per unwaived late day
@@ -120,14 +152,15 @@ exports.generateSalary = async (req, res) => {
     // both figures — this is what makes salary reflect only working days
     // actually worked, instead of a flat assumed 26 days regardless of
     // attendance.
-    let daysWorked = manualWorked, daysAbsent = manualAbsent, lateDays = 0, attendanceNote = '';
-    if (daysWorked === undefined || daysAbsent === undefined) {
-      const stats = await computeAttendanceStats(employeeId, month, year);
-      if (daysWorked === undefined) daysWorked = stats.daysWorked;
-      if (daysAbsent === undefined) daysAbsent = stats.daysAbsent;
-      lateDays = stats.lateDays;
-      attendanceNote = `Auto-computed from attendance: ${stats.daysWorked} worked, ${stats.daysAbsent} absent, ${stats.lateDays} late (unwaived), ${stats.daysOnLeave} on approved leave (of ${stats.workingDaysCounted} working days).`;
-    } else if (req.body.lateDays !== undefined) {
+let daysWorked = manualWorked, daysAbsent = manualAbsent, lateDays = 0, attendanceNote = '', totalWorkedMinutes = 0;
+if (daysWorked === undefined || daysAbsent === undefined) {
+  const stats = await computeAttendanceStats(employeeId, month, year);
+  if (daysWorked === undefined) daysWorked = stats.daysWorked;
+  if (daysAbsent === undefined) daysAbsent = stats.daysAbsent;
+  lateDays = stats.lateDays;
+  totalWorkedMinutes = stats.totalWorkedMinutes;
+  attendanceNote = `Auto-computed from attendance: ${stats.daysWorked} days worked (${Math.floor(stats.totalWorkedMinutes/60)}h ${stats.totalWorkedMinutes%60}m total), ${stats.daysAbsent} absent/short, ${stats.lateDays} late (unwaived), ${stats.daysOnLeave} on approved leave (of ${stats.workingDaysCounted} working days).`;
+} else if (req.body.lateDays !== undefined) {
       lateDays = Number(req.body.lateDays);
     }
 
@@ -137,7 +170,7 @@ exports.generateSalary = async (req, res) => {
       { employee:employeeId, month, year },
       {
         employee:employeeId, month, year, basicPay:basic,
-        daysWorked, daysAbsent, lateDays, overtimeHours, overtimePay:c.otPay,
+        daysWorked, daysAbsent, lateDays, totalWorkedMinutes, overtimeHours, overtimePay:c.otPay,      
         allowances:{ hra:c.hra, da:c.da, ta:c.ta, medical:c.medical, special:c.special },
         deductions:{ pf:c.pf, esi:c.esi, tax:c.tax, absent:c.absent, lateFine:c.lateFine, loan, other:otherDed },
         grossPay:c.gross, netPay:c.net, remarks, paymentMode, bankAccount, status:'pending',
@@ -172,8 +205,7 @@ exports.bulkGenerate = async (req, res) => {
       const c = calcSalary(basic, stats.daysWorked, stats.daysAbsent, 0, 0, 0, 0, stats.lateDays);
       return Salary.findOneAndUpdate(
         { employee:emp._id, month, year },
-        { employee:emp._id, month, year, basicPay:basic, daysWorked:stats.daysWorked, daysAbsent:stats.daysAbsent, lateDays:stats.lateDays, overtimeHours:0, overtimePay:0,
-          allowances:{ hra:c.hra, da:c.da, ta:c.ta, medical:c.medical, special:c.special },
+{ employee:emp._id, month, year, basicPay:basic, daysWorked:stats.daysWorked, daysAbsent:stats.daysAbsent, lateDays:stats.lateDays, totalWorkedMinutes:stats.totalWorkedMinutes, overtimeHours:0, overtimePay:0,          allowances:{ hra:c.hra, da:c.da, ta:c.ta, medical:c.medical, special:c.special },
           deductions:{ pf:c.pf, esi:c.esi, tax:c.tax, absent:c.absent, lateFine:c.lateFine, loan:0, other:0 },
           grossPay:c.gross, netPay:c.net, status:'pending' },
         { upsert:true, new:true }
