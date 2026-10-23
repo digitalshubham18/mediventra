@@ -12,6 +12,14 @@ const STATUS_CFG = {
   on_leave: { bg:'#e0f2fe', c:'#0369a1', label:'🌴 On Leave' },
   absent:   { bg:'#fee2e2', c:'#dc2626', label:'❌ Absent' },
 };
+const fmtTime = d => new Date(d).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+
+const fmtDuration = (inT, outT) => {
+  if (!inT || !outT) return '';
+  const totalSec = Math.max(0, Math.floor((new Date(outT) - new Date(inT)) / 1000));
+  const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = totalSec % 60;
+  return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s}s` : `${s}s`;
+};
 
 function monthStr(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
 
@@ -157,10 +165,10 @@ export default function AttendancePage() {
                   <motion.div key={r._id} initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', background:'#fff', border:'1px solid #e2e8f0', borderRadius:10, flexWrap:'wrap', gap:8 }}>
                     <div style={{ fontWeight:700, fontSize:13 }}>{new Date(r.date).toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})}</div>
                     <div style={{ fontSize:12, color:'#64748b' }}>
-                      {r.checkInTime ? `In: ${new Date(r.checkInTime).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}` : '—'}
-                      {r.checkOutTime ? ` · Out: ${new Date(r.checkOutTime).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}` : ''}
-                      {r.workedMinutes != null && ` · ${(r.workedMinutes/60).toFixed(1)}h`}
-                    </div>
+  {r.checkInTime ? `In: ${fmtTime(r.checkInTime)}` : '—'}
+  {r.checkOutTime ? ` · Out: ${fmtTime(r.checkOutTime)}` : ''}
+  {r.checkInTime && r.checkOutTime && ` · Duration: ${fmtDuration(r.checkInTime, r.checkOutTime)}`}
+</div>
                     <span style={{ padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:700, background:cfg.bg, color:cfg.c }}>{cfg.label}</span>
                     {r.status === 'late' && !r.lateWaived && (
                       <button className="btn btn-outline btn-xs" onClick={()=>{ setLateRequestFor(r); setLateReason(''); }}>Request Waiver</button>
@@ -193,8 +201,9 @@ export default function AttendancePage() {
                     <div>
                       <div style={{ fontWeight:700, fontSize:13 }}>{r.user?.name} <span style={{ fontWeight:500, color:'#94a3b8', fontSize:11 }}>({r.user?.role})</span></div>
                       <div style={{ fontSize:11.5, color:'#64748b' }}>{new Date(r.date).toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})}
-                        {r.checkInTime && ` · In: ${new Date(r.checkInTime).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}`}
-                        {r.checkOutTime && ` · Out: ${new Date(r.checkOutTime).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}`}
+                        {r.checkInTime && ` · In: ${fmtTime(r.checkInTime)}`}
+{r.checkOutTime && ` · Out: ${fmtTime(r.checkOutTime)}`}
+{r.checkInTime && r.checkOutTime && ` · Duration: ${fmtDuration(r.checkInTime, r.checkOutTime)}`}
                         {r.computed && ' · (auto-computed, no check-in on record)'}
                       </div>
                     </div>
