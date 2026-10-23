@@ -8,7 +8,7 @@ const { notify } = require('../utils/notify');
 const GRACE_MINUTES = 5; // arriving more than 5 min after shift start counts as "late" (e.g. 9:00 shift → late after 9:05)
 const LATE_FINE = 50; // ₹ deducted per unwaived late day when salary is generated
 const FACE_MATCH_THRESHOLD = 0.5; // face-api.js convention: euclidean distance below this = same person
-
+const MIN_VALID_SESSION_MINUTES = 5; // sign-out sooner than this = accidental check-in/out, don't judge the day as half day
 function euclideanDistance(a, b) {
   let sum = 0;
   for (let i = 0; i < a.length; i++) sum += (a[i] - b[i]) ** 2;
@@ -133,11 +133,27 @@ exports.checkOut = async (req, res) => {
 
     record.checkOutTime = now;
     record.checkOutMethod = method;
-    record.workedMinutes = Math.round((now - record.checkInTime) / 60000);
-    if (record.workedMinutes < 240 && record.status !== 'late') record.status = 'half_day'; // < 4 hrs worked
-    await record.save();
+const workedMs = now - record.checkInTime;
+record.workedMinutes = Math.round(workedMs / 60000);
 
-    res.json({ success: true, data: record, message: `Checked out — ${(record.workedMinutes/60).toFixed(1)} hrs worked today.` });
+// Only a genuine short day counts as half day. A very short session
+// (accidental check-in, or an immediate sign-out) keeps its current status,
+// and the real time interval and duration are shown instead.
+if (record.workedMinutes >= MIN_VALID_SESSION_MINUTES && record.workedMinutes < 240 && record.status !== 'late') {
+  record.status = 'half_day'; // worked 5 min – 4 hrs
+}
+await record.save();
+
+const totalSec = Math.floor(workedMs / 1000);
+const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = totalSec % 60;
+const durationText = h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s}s` : `${s}s`;
+
+res.json({
+  success: true, data: record,
+  message: record.status === 'half_day'
+    ? `Checked out — Half Day (${durationText} worked).`
+    : `Checked out — ${durationText} worked today.`,
+});
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 };
 
