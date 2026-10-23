@@ -55,6 +55,8 @@ const SalarySchema = new mongoose.Schema({
   daysWorked:   { type: Number, default:26 },
   daysAbsent:   { type: Number, default:0 },
   lateDays:     { type: Number, default:0 }, // unwaived late days this month, each fined ₹50
+    lateDays:     { type: Number, default:0 }, // unwaived late days this month, each fined ₹50
+  totalWorkedMinutes: { type: Number, default:0 }, // total of all check-in → check-out time in the month
   overtimeHours:{ type: Number, default:0 },
   overtimePay:  { type: Number, default:0 },
   status:       { type: String, enum:['pending','credited','held','failed'], default:'pending' },
